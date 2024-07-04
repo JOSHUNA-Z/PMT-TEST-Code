@@ -14,7 +14,7 @@
 #include <TCanvas.h>
 #include <TString.h>
 #include "CalculateCharge.h"
-
+#include <stdint.h>
 //****parameters for data_read*******
 #define BUFFER_LENGTH  10240   //in byte //65844
 #define MAX_CHANNEL_NUMBER  5   //16*16*2
@@ -41,9 +41,9 @@ private:
                          //include head(16 byte),waveform(2000 byte,1000 data points),tail(16 Byte)
 //  double residue = 0;
  double packed_waveform = 0;
-
  int  readout_star=0;
- uint32_t star[BUFFER_LENGTH];
+ uint16_t event_temp[BUFFER_LENGTH];
+
  uint32_t size_bytes = 0;
  uint32_t event[BUFFER_LENGTH];
  uint16_t event_short[BUFFER_LENGTH];
@@ -66,9 +66,6 @@ private:
  int event_number_in_file=0;
  int readout_size=0;
  int j=0;//statis the number of abnormal waveform
- 
-
- 
  CalculateCharge cal; 
 
 public:
@@ -99,10 +96,7 @@ public:
     void read_data()
     {
         int n_counts=0;
-        double baseline_temp=0;
-
-        // vector<double> &test_charge2 ;
-        
+        double baseline_temp=0;        
         GetFileName(filename);
         cout << "File name is " << filename << endl;
         FILE *fp = fopen(filename.c_str(), "rb");
@@ -122,19 +116,49 @@ public:
         cout << "File size is " << fileSize<<" Byte" << endl;
         Num_records=fileSize/record_size;
         cout<<"the numbers of waveform are "<<std::fixed << std::setprecision(0)<< Num_records <<endl;
+        int  readout_star=0;
+        uint16_t event_temp[BUFFER_LENGTH];
+
+        uint32_t size_bytes = 0;
+        uint32_t event[BUFFER_LENGTH];
+        uint16_t event_short[BUFFER_LENGTH];
+        int global_event_ID=0;
+        int global_range_ID=0;
+        int global_GCUboard_ID=0;
+        int global_package_size=0;
+        int test_i=0;// waveform
+        int event_number_in_file=0;
+        int readout_size=0;
+
+        int abnormal_wave_mark=0;
 
         while(test_i<Num_records)
         {
+            //===============fix abnormal waveform=========================
+            if (abnormal_wave_mark==1)
+            {
+                size_bytes=1;
+                readout_star=fread(event_temp,sizeof(uint16_t),size_bytes,fp); //DAQ save data in 4 bytes
+                cout<<"event temp 0: "<<(event_temp[0]&0xFFFF)<<endl;//<<" event temp 1: "<<(event_temp[1]&0x00FF)
+                if((event_temp[0]&0xFFFF)==0x6980)//&&(event_temp[1]&0x00FF)==0x
+                {
+                    abnormal_wave_mark=0;
+                    continue;
+                }
+                else
+                {
+                    continue;
+                }
+            }
             test_i=test_i+1;
             size_bytes=4;
             readout_star=fread(event,sizeof(uint32_t),size_bytes,fp); //DAQ save data in 4 bytes
-            if((event[0]&0xFFFF)!=0x6980){continue;}
+            // if((event[0]&0xFFFF)!=0x6980){continue;}
             //**********read head of waveform and save*************
             for(int i=0;i<int(size_bytes);i++)
                {
                 event_short[i*2]=(event[i]&0xFFFF);
-                
-                cout<<"raw event_short =" << event_short[i*2] <<endl;
+                // cout<<"raw event_short =" << event_short[i*2] <<endl;
                 event_short[i*2]=((event_short[i*2]&0xFF)<<8)+((event_short[i*2]&0xFF00)>>8);
                 event_short[i*2+1]=(event[i]&0xFFFF0000)>>16;
                 event_short[i*2+1]=((event_short[i*2+1]&0xFF)<<8)+((event_short[i*2+1]&0xFF00)>>8);
@@ -144,11 +168,11 @@ public:
                   global_range_ID=((event_short[i*2+1]));
                   cout<<"global_range_ID="<<global_range_ID<<endl;
                   }
-                if (global_range_ID < 0 || global_range_ID > 5) 
-                {
-                    j=j+1;
-                    break;
-                }
+                // if (global_range_ID < 0 || global_range_ID > 5) //throw out the data that is abnormal
+                // {
+                //     j=j+1;
+                //     break;
+                // }
                 if(i==1)
                   {
                   package_points=event_short[i*2]*8;
@@ -157,6 +181,14 @@ public:
                 //   cout<<i<<"  event_short[i*2] = " << event_short[i*2]<<"  event_short[i*2+1] ="<< event_short[i*2+1] << endl;
                
                }
+            if (global_range_ID < 0 || global_range_ID > 5) //throw out the data that is abnormal
+            {
+                j=j+1;
+                abnormal_wave_mark=1;
+                continue;
+            }
+
+
             //*******************read waveform data and judge the data ******************
             size_bytes=(package_points-8-8)/2;//sampling points of package, (package_points -8(head)-8(tail))*16bits
             readout_size=fread(event,sizeof(uint32_t),size_bytes,fp);
@@ -207,12 +239,6 @@ public:
             //     c2->Clear();  
             // }
 
-
-
-
-
-
-
             Yarray.clear(); 
             Xarray.clear();
 
@@ -222,35 +248,66 @@ public:
         }
         cout << " j = " <<j<<endl;
         fclose(fp);
-        TCanvas *c1 = new TCanvas("c1","c1",1100,1100);
+        TCanvas *c1 = new TCanvas("c1","Small range for Big gain",1100,1100);
+        TCanvas *c2 = new TCanvas("c2","Big range for Small gain",1100,1100);
         c1->Divide(2,2);
+        c2->Divide(2,2);
+
         TH1F *h1 = new TH1F("Channal_No 1","charge spectrum",800,0,20);
         TH1F *h2 = new TH1F("Channal_No 2","charge spectrum",800,0,20);
         TH1F *h3 = new TH1F("Channal_No 3","charge spectrum",800,0,20);
 
+        TH1F *h1_BSi = new TH1F("Channal_No 1_BSi","charge spectrum",800,0,50);
+        TH1F *h2_BSi = new TH1F("Channal_No 2_BSi","charge spectrum",800,0,50);
+        TH1F *h3_BSi = new TH1F("Channal_No 3_BSi","charge spectrum",800,0,50);
 
 
 
         std::vector<double>& charge_data0 = cal.getChargeCh0();
+        std::vector<double>& charge_data0_BSi = cal.getChargeCh0_BSi();
+
         std::vector<double>& charge_data1 = cal.getChargeCh1();
+        std::vector<double>& charge_data1_BSi = cal.getChargeCh1_BSi();
+
         std::vector<double>& charge_data2 = cal.getChargeCh2();
+        std::vector<double>& charge_data2_BSi = cal.getChargeCh2_BSi();
+
 
         cout << " the size of charge_data0 = " << charge_data0.size() << endl;
         cout << " the size of charge_data1 = " << charge_data1.size() << endl;
         cout << " the size of charge_data2 = " << charge_data2.size() << endl;
 
+        cout << " the size of charge_data0_BSi = " << charge_data0_BSi.size() << endl;
+        cout << " the size of charge_data1_BSi = " << charge_data1_BSi.size() << endl;
+        cout << " the size of charge_data2_BSi = " << charge_data2_BSi.size() << endl;
+
         for (double charge : charge_data0) 
         {
             h1->Fill(charge);
         }
+        for(double charge_BSi : charge_data0_BSi)
+        {
+            h1_BSi->Fill(charge_BSi);
+        }
+
         for (double charge : charge_data1) 
         {
             h2->Fill(charge);
         }
+        for(double charge_BSi : charge_data1_BSi)
+        {
+            h2_BSi->Fill(charge_BSi);
+        }
+
         for (double charge : charge_data2) 
         {
             h3->Fill(charge);
         }
+        for(double charge_BSi : charge_data2_BSi)
+        {
+            h3_BSi->Fill(charge_BSi);
+        }
+
         c1->cd(1);
         h1->GetYaxis()->SetTitle("Counts");
         h1->GetXaxis()->SetTitle("PE");
@@ -269,12 +326,32 @@ public:
         h3->Draw();
         c1->Update();
 
+        // ============draw Big signal charge spectrum==============
+        c2->cd(1);
+        h1_BSi->GetYaxis()->SetTitle("Counts");
+        h1_BSi->GetXaxis()->SetTitle("PE");
+        h1_BSi->Draw();
+        c2->Update();
+        
+        c2->cd(2);
+        h2_BSi->GetYaxis()->SetTitle("Counts");
+        h2_BSi->GetXaxis()->SetTitle("PE");
+        h2_BSi->Draw();
+        c2->Update();
+
+        c2->cd(3);        
+        h3_BSi->GetYaxis()->SetTitle("Counts");
+        h3_BSi->GetXaxis()->SetTitle("PE");
+        h3_BSi->Draw();
+        c2->Update();
+
         // c1->Print("charge_spectrum0605-1704.png", "png");
         // c1->Print("charge_spectrum-GCU5934-0606-1707.png", "png");
         // c1->Print("charge_spectrum-GCU5934-0607-1624.png", "png");
         // c1->Print("charge_spectrum-GCU5934-06-08-2331.png","png1200");
         // c1->Print("charge_spectrum-GCU7049-0617-2315.png","png1200");//NS = no source
         // c1->Print("charge_spectrum-GCU7049-06118-22-39.png","png1200");
+
     }
 
 

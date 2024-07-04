@@ -8,22 +8,42 @@ class CalculateCharge
 private:
 //  vector<double> wave;
  vector<double> charge_ch1;
- 
  vector<double> charge_ch2;
  vector<double> charge_ch0;
  
+ vector<double> charge_ch1_BSi;
+ vector<double> charge_ch2_BSi;
+ vector<double> charge_ch0_BSi;
  
  vector<double> peaks;
  double baseline=0;
  double tenkilo=10000;
 
- const int threshold=25;
+ int threshold;
+ int threshold_temp;
+ const int threshold_SSi=25;//SSi = Small Signal
+ const int threshold_BSi=3;
  const double high_gain_factor = (1.2/(1<<14))*1000/0.55;
  const double low_gain_factor = (1.2/(1<<14))*1000/0.08;
  
  int peak_times=0;
 
 public:
+
+    int Gethreshold(int &gain)
+        {
+            if(gain==1)
+            {
+                threshold_temp = threshold_SSi;
+                return threshold_temp;
+            }
+            else
+            {
+                threshold_temp = threshold_BSi;
+                return threshold_temp;
+            }  
+        }
+
     void calculate_peak( vector<double> &wave, int &ch,int &gain,const int &min_length = 18)
     {
          double mean=0;
@@ -37,6 +57,8 @@ public:
         }
         mean = sumwave/(wave.size());//first mean
         sumwave=0;
+        
+        threshold = Gethreshold(gain);
         
         for(int j=0;j<wave.size();j++)
         {
@@ -88,11 +110,19 @@ public:
                             
                             peak_charge+=(baseline-peaks.at(ns));
                         }
-                        peak_charge = (peak_charge * high_gain_factor/(1E3*1E9*50*1E-12))/1.602;
-                       
+                        if(gain==1)
+                        {
+                            peak_charge = (peak_charge * high_gain_factor/(1E3*1E9*50*1E-12))/1.602;
+                        }
+                       if(gain==0)
+                        {
+                            peak_charge = (peak_charge * low_gain_factor/(1E3*1E9*50*1E-12))/1.602;
+                        }
                         // cout <<"peak =" <<std::fixed<<std::setprecision(6)<< peak_charge << endl;
                         // cout << " gain =" << gain << " ch ="<<ch<<endl;
                         // charge.push_back(peak_charge);//unit: adc*ns
+                        
+                        // ===========different gain for small or big signal ===========
                         if(gain==1&&ch==0)
                         {
         
@@ -112,6 +142,29 @@ public:
                             peak_times+=1;
                         }
 
+
+                        if(gain==0&&ch==0)
+                        {
+        
+                            charge_ch0_BSi.push_back(peak_charge);//unit: adc*ns
+                            // cout << " charge_ch0 = " << charge_ch0[peak_times] << endl;
+
+                        }
+                        if(gain==0&&ch==1)
+                        {
+        
+                            charge_ch1_BSi.push_back(peak_charge);//unit: adc*ns
+                            // cout << " charge_ch0 = " << charge_ch0[peak_times] << endl;
+
+                        }
+                        if(gain==0&&ch==2)
+                        {
+        
+                            charge_ch2_BSi.push_back(peak_charge);//unit: adc*ns
+                            // cout << " charge_ch0 = " << charge_ch0[peak_times] << endl;
+
+                        }
+
                     }
                     
                     peaks.clear();
@@ -128,6 +181,11 @@ public:
     vector<double>& getChargeCh0() { return charge_ch0; }
     vector<double>& getChargeCh1() { return charge_ch1; }
     vector<double>& getChargeCh2() { return charge_ch2; }
+
+    vector<double>& getChargeCh0_BSi() { return charge_ch0_BSi; }//BSi=Big Signal
+    vector<double>& getChargeCh1_BSi() { return charge_ch1_BSi; }
+    vector<double>& getChargeCh2_BSi() { return charge_ch2_BSi; }
+    
 
 };
 
