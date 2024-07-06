@@ -56,7 +56,10 @@ private:
 
  int gain_gcu=1;
  int ch_gcu=2;
-        
+
+ vector<double> test_charge2;
+
+
  int global_event_ID=0;
  int global_range_ID=0;
  int global_GCUboard_ID=0;
@@ -195,24 +198,9 @@ public:
             for(int i=0;i<int(size_bytes);i++)
             {
                 event_short[i*2]=(event[i]&0xFFFF);
-                
-                // if((event[i]&0x00FFFF00) == 0x00698000)
-                // {
-                //     j=j+1;
-                //     break;
-                // }
-                // if((event[i]&0xFFFF) == 0x6980)
-                // {
-                //     j=j+1;
-                //     break;
-                // }
+
                 event_short[i*2]=((event_short[i*2]&0xFF)<<8)+((event_short[i*2]&0xFF00)>>8);
                 event_short[i*2+1]=(event[i]&0xFFFF0000)>>16;
-                // if((event[i]&0xFFFF0000) == 0x6980)
-                // {
-                //     j=j+1;
-                //     break;
-                // }
                 event_short[i*2+1]=((event_short[i*2+1]&0xFF)<<8)+((event_short[i*2+1]&0xFF00)>>8);
                 
                 Yarray.push_back(static_cast<double>(event_short[i*2]));
@@ -266,12 +254,15 @@ public:
         std::vector<double>& charge_data0 = cal.getChargeCh0();
         std::vector<double>& charge_data0_BSi = cal.getChargeCh0_BSi();
 
+        
+
         std::vector<double>& charge_data1 = cal.getChargeCh1();
         std::vector<double>& charge_data1_BSi = cal.getChargeCh1_BSi();
 
         std::vector<double>& charge_data2 = cal.getChargeCh2();
         std::vector<double>& charge_data2_BSi = cal.getChargeCh2_BSi();
 
+        test_charge2 = cal.getChargeCh2();
 
         cout << " the size of charge_data0 = " << charge_data0.size() << endl;
         cout << " the size of charge_data1 = " << charge_data1.size() << endl;
@@ -353,7 +344,7 @@ public:
         // c1->Print("charge_spectrum-GCU7049-06118-22-39.png","png1200");
 
     }
-
+    vector<double>& SaveChargeCh2() { return test_charge2; }
 
 };
 
